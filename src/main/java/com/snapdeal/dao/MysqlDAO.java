@@ -7,13 +7,14 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.snapdeal.dbmanager.DBManager;
 import com.snapdeal.entity.CriteriaJson;
 import com.snapdeal.entity.SuborderDetails;
 
 
 
 public class MysqlDAO {
-	
+
 	Connection connection = null;
 	ResultSet resultSet = null;
 	String queryString = "";
@@ -24,13 +25,13 @@ public class MysqlDAO {
 	{
 		
 		List<SuborderDetails> suboDetails = null;
-		
 		try{
-			statement = connection.createStatement();
-			String query = "SELECT * from shipping.ica_couriers where subo in (" + suborder+")";
+			connection = DBManager.getLocalConnection();
+			statement = (Statement)connection.createStatement();
+
+			queryString = "SELECT * from shipping.ica_couriers where subo in (" + suborder+")";
 			suboDetails = new ArrayList<SuborderDetails>();
-			ResultSet resultSet = statement.executeQuery(query);
-		
+			resultSet = statement.executeQuery(queryString);
 			if(resultSet != null){
 				while(resultSet.next()){
 					SuborderDetails sd = new SuborderDetails();
@@ -53,6 +54,7 @@ public class MysqlDAO {
 					sd.setMultipart(resultSet.getString("MULTIPART"));
 					sd.setDgType(resultSet.getString("DANGEROUSGOODSTYPE"));
 					sd.setShippingMode(resultSet.getString("SHIPPING_MODE"));
+					sd.setShippingMode(resultSet.getString("SHIPPING_METHOD"));
 					sd.setStdCourier(resultSet.getString("std_courier_t"));
 					sd.setCodCourier(resultSet.getString("cod_courier_t"));
 					sd.setReason(resultSet.getString("reason"));
@@ -81,13 +83,13 @@ public class MysqlDAO {
 		return suboDetails;
 	}
 
-	public List<SuborderDetails> getRuleId(List<SuborderDetails> suboDetailsList )
+	public List<SuborderDetails> getRuleId(List<SuborderDetails> suboDetailsList) throws SQLException
 	{
-		
+		connection = DBManager.getLocalConnection();
+		statement = connection.createStatement();
 		List<SuborderDetails> sdListWithRequest = new ArrayList<SuborderDetails>();
 		for (SuborderDetails sd : suboDetailsList){
 			try{
-				statement = connection.createStatement();
 				String query = "select rule_id," +
 				"case when (SOURCE_LOCATION like '%" + sd.getPulc() +"%' and (LOCATION like '%"+ sd.getDelc() +"%' or " +
 				"DESTINATION_LOCATION like '%"+sd.getDelc()+"%')) then 	'C-C' " +
@@ -141,28 +143,23 @@ public class MysqlDAO {
 				//Handle errors for Class.forName
 				e.printStackTrace();
 			}
-			finally{
-				try {
-					connection.close();
-				} catch (SQLException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
+			
 		}
+		
+		connection.close();
 		return sdListWithRequest;
 	}
 
 
 
-	public List<String> getSuborders(){
+	public String getSuborders(){
 		
-		
+		connection = DBManager.getLocalConnection();
+		String suboString="";
 		List<String> subo = new ArrayList<String>();
-		String shippingMode = "";
 		try{
 			statement = (Statement) connection.createStatement();
-			String query = "SELECT suborder_code FROM shipping.tmp_suborder2 limit 10";
+			String query = "SELECT suborder_code FROM shipping.tmp_suborder2 limit 2";
 			
 			System.out.println(query);
 			ResultSet resultSet = statement.executeQuery(query);
@@ -187,25 +184,34 @@ public class MysqlDAO {
 				e.printStackTrace();
 			}
 		}
-		System.out.println("ship"+subo);
-		return subo;
+		
+		for(String suborder:subo){
+			if (suboString.length() == 0)
+				suboString = "'"+ suborder +"'";
+			else
+				suboString = suboString + ",'"+ suborder +"'";
+		}
+		return suboString;
 	}
 	
 	
-public List<CriteriaJson> checkBigQuery(String ruleId,Connection connection){
-		
-		List<CriteriaJson> json = new ArrayList<CriteriaJson>();
+public List<CriteriaJson> checkBigQuery(String ruleId){
+	
+		connection = DBManager.getLocalConnection();
+		List<CriteriaJson> json = null;
 		try{
 			statement = connection.createStatement();
 			String query = "SELECT rule_id,criteria from score.criteria_json where rule_id in ("+ruleId+")";
- 		
+			json = new ArrayList<CriteriaJson>();
 			System.out.println(query);
 			ResultSet resultSet = statement.executeQuery(query);
-			CriteriaJson cj = new CriteriaJson();
+			
 			if(resultSet != null){
 				while(resultSet.next()){
+					CriteriaJson cj = new CriteriaJson();
 					cj.setId(resultSet.getString("rule_id"));
 					cj.setCriteria(resultSet.getString("criteria"));
+					//System.out.println(resultSet.getString("criteria"));
 					json.add(cj);
 					}
 			}
@@ -231,48 +237,5 @@ public List<CriteriaJson> checkBigQuery(String ruleId,Connection connection){
 
 
 	
-	public List<SuborderDetails> getSuborderDetails()
-	{
 	
-		List<SuborderDetails> details = null;
-		String shippingMode = "";
-		try{
-			statement = connection.createStatement();
-			queryString = "SELECT * FROM shipping.tmp_suborder2 limit 10";
-
-			details = new ArrayList<SuborderDetails>();
-			resultSet = statement.executeQuery(queryString);
-			SuborderDetails sd = new SuborderDetails();
-			if(resultSet != null){
-				if(resultSet.next()){
-					sd.setSupc(resultSet.getString("SUPC"));
-					details.add(sd);
-				}
-			}
-			resultSet.close();
-		}catch(SQLException se){
-			se.printStackTrace();
-		}catch(Exception e){
-			//Handle errors for Class.forName
-			e.printStackTrace();
-		}
-		finally{
-			try {
-				connection.close();
-			} catch (SQLException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
-		
-		return details;
-	}
-
-	
-	
-	
-	
-
-
-
 }
